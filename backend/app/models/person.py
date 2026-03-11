@@ -8,10 +8,9 @@ class Person(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
-    email = Column(String, unique=True, index=True, nullable=True)
-    phone = Column(String, nullable=True)
+    age = Column(Integer, nullable=True)
+    gender = Column(String, nullable=True)  # Male, Female, Other
     employee_id = Column(String, unique=True, index=True, nullable=True)
-    department = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

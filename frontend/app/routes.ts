@@ -5,4 +5,5 @@ export default [
   route("persons", "routes/persons.tsx"),
   route("cameras", "routes/cameras.tsx"),
   route("logs", "routes/logs.tsx"),
+  route("verification", "routes/verification.tsx"),
 ] satisfies RouteConfig;

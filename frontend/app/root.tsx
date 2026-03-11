@@ -9,6 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import Sidebar from "./components/Sidebar";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -19,7 +20,7 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Smooch+Sans:wght@100..900&family=Saira:ital,wght@0,100..900;1,100..900&display=swap",
   },
 ];
 
@@ -32,7 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body>
+      <body className="bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -42,7 +43,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <div className="flex">
+      <Sidebar />
+      <main className="ml-64 flex-1 min-h-screen">
+        <div className="max-w-[1400px] mx-auto">
+          <Outlet />
+        </div>
+      </main>
+    </div>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
