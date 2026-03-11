@@ -1,0 +1,12 @@
+from fastapi import APIRouter
+from .persons import router as persons_router
+from .cameras import router as cameras_router
+from .logs import router as logs_router
+
+api_router = APIRouter()
+
+api_router.include_router(persons_router)
+api_router.include_router(cameras_router)
+api_router.include_router(logs_router)
+
+__all__ = ["api_router"]
