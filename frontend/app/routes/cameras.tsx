@@ -1,145 +1,318 @@
-import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
-import { MdAdd, MdClose } from 'react-icons/md';
+import { useEffect, useRef, useState } from 'react';
+import { MdVideocam, MdVideocamOff, MdPerson, MdCheckCircle, MdCancel } from 'react-icons/md';
+
+interface DetectionResult {
+  match: boolean;
+  person_id?: number;
+  person_name?: string;
+  confidence?: number;
+  message: string;
+  closest_match?: {
+    person_id: number;
+    person_name: string;
+    confidence: number;
+  };
+}
 
 export default function Cameras() {
-  const [cameras, setCameras] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    location: '',
-    stream_url: '',
-    camera_type: 'ip_camera',
-    fps: 30,
-    resolution: '1920x1080'
-  });
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [lastResult, setLastResult] = useState<DetectionResult | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startCamera = async () => {
+    try {
+      setError(null);
+      console.log('Requesting camera access...');
+      
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user'
+        },
+        audio: false
+      });
+
+      console.log('Camera access granted', mediaStream);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        
+        // Wait for video to be ready
+        videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded');
+          videoRef.current?.play().then(() => {
+            console.log('Video playing');
+            setIsStreaming(true);
+          }).catch(err => {
+            console.error('Error playing video:', err);
+            setError('Failed to play video stream');
+          });
+        };
+        
+        setStream(mediaStream);
+      }
+    } catch (err: any) {
+      console.error('Error accessing camera:', err);
+      if (err.name === 'NotAllowedError') {
+        setError('Camera access denied. Please allow camera permissions in your browser.');
+      } else if (err.name === 'NotFoundError') {
+        setError('No camera found. Please connect a camera and try again.');
+      } else {
+        setError(`Failed to access camera: ${err.message}`);
+      }
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      setStream(null);
+      setIsStreaming(false);
+      stopDetection();
+    }
+  };
+
+  const captureFrame = async (): Promise<Blob | null> => {
+    if (!videoRef.current || !canvasRef.current) return null;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+
+    if (!context) return null;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    return new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8);
+    });
+  };
+
+  const detectFace = async () => {
+    if (detecting) return;
+
+    setDetecting(true);
+    
+    try {
+      const frameBlob = await captureFrame();
+
+      if (!frameBlob) {
+        console.log('Failed to capture frame');
+        setDetecting(false);
+        return;
+      }
+
+      console.log('Sending frame for detection...');
+      const formData = new FormData();
+      formData.append('file', frameBlob, 'frame.jpg');
+
+      const response = await fetch('http://localhost:8000/api/v1/faces/verify', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      console.log('Detection result:', data);
+      setLastResult(data);
+    } catch (error) {
+      console.error('Detection error:', error);
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  const startDetection = () => {
+    setIsDetecting(true);
+    setLastResult(null);
+    // Detect every 2 seconds
+    detectionIntervalRef.current = setInterval(() => {
+      detectFace();
+    }, 2000);
+  };
+
+  const stopDetection = () => {
+    setIsDetecting(false);
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+      detectionIntervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
-    loadCameras();
-  }, []);
-
-  const loadCameras = () => {
-    api.get('/cameras')
-      .then(data => setCameras(data))
-      .catch(err => console.error('Error:', err));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const dataToSend: any = {
-      name: formData.name,
-      location: formData.location,
-      stream_url: formData.stream_url,
-      camera_type: formData.camera_type,
-      fps: formData.fps,
-      resolution: formData.resolution
+    return () => {
+      // Cleanup on unmount
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      stopDetection();
     };
-    
-    api.post('/cameras', dataToSend)
-      .then(() => {
-        loadCameras();
-        setShowForm(false);
-        setFormData({ name: '', location: '', stream_url: '', camera_type: 'ip_camera', fps: 30, resolution: '1920x1080' });
-      })
-      .catch(err => console.error('Error:', err));
-  };
+  }, [stream]);
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-5xl font-bold text-gray-800">Cameras</h1>
-          <p className="text-gray-600 mt-1">Manage surveillance cameras</p>
+          <h1 className="text-5xl font-bold text-gray-800">Live Camera</h1>
+          <p className="text-gray-600 mt-2">Real-time face detection</p>
         </div>
-        <button 
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition shadow-lg"
-        >
-          {showForm ? <MdClose className="text-xl" /> : <MdAdd className="text-xl" />}
-          {showForm ? 'Cancel' : 'Add Camera'}
-        </button>
+        <div className="flex gap-3">
+          {isStreaming && (
+            <button
+              onClick={isDetecting ? stopDetection : startDetection}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl transition shadow-lg ${
+                isDetecting
+                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+              }`}
+            >
+              <MdPerson className="text-xl" />
+              {isDetecting ? 'Stop Detection' : 'Start Detection'}
+            </button>
+          )}
+          <button
+            onClick={isStreaming ? stopCamera : startCamera}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl transition shadow-lg ${
+              isStreaming
+                ? 'bg-red-500 hover:bg-red-600 text-white'
+                : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+            }`}
+          >
+            {isStreaming ? (
+              <>
+                <MdVideocamOff className="text-xl" />
+                Stop Camera
+              </>
+            ) : (
+              <>
+                <MdVideocam className="text-xl" />
+                Start Camera
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="mt-6 bg-white/70 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/50">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Camera Name *</label>
-              <input 
-                type="text" 
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white/50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Location *</label>
-              <input 
-                type="text"
-                required
-                value={formData.location}
-                onChange={(e) => setFormData({...formData, location: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white/50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stream URL *</label>
-              <input 
-                type="text"
-                required
-                value={formData.stream_url}
-                onChange={(e) => setFormData({...formData, stream_url: e.target.value})}
-                placeholder="rtsp://..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white/50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Camera Type</label>
-              <select
-                value={formData.camera_type}
-                onChange={(e) => setFormData({...formData, camera_type: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white/50"
-              >
-                <option value="ip_camera">IP Camera</option>
-                <option value="phone">Phone</option>
-                <option value="webcam">Webcam</option>
-              </select>
-            </div>
-          </div>
-          <button 
-            type="submit" 
-            className="mt-6 px-6 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition shadow-lg"
-          >
-            Create Camera
-          </button>
-        </form>
+      {error && (
+        <div className="mb-6 p-4 bg-red-100 border border-red-300 rounded-xl text-red-700">
+          {error}
+        </div>
       )}
-      
-      <div className="mt-6">
-        {cameras.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No cameras found</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {cameras.map((camera: any) => (
-              <div key={camera.id} className="bg-white/70 backdrop-blur-sm p-5 rounded-2xl shadow-lg border border-white/50 hover:shadow-xl transition">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-800 text-lg">{camera.name}</h3>
-                    <p className="text-sm text-gray-600 mt-1">{camera.location}</p>
-                    <div className="flex gap-2 mt-3">
-                      <span className={`px-3 py-1 rounded-lg text-xs ${camera.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700'}`}>
-                        {camera.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                      <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-xs">{camera.camera_type}</span>
-                    </div>
-                  </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-6">
+          <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover ${isStreaming ? 'block' : 'hidden'}`}
+            />
+            <canvas ref={canvasRef} className="hidden" />
+            {!isStreaming && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-gray-400">
+                  <MdVideocamOff className="text-6xl mx-auto mb-4" />
+                  <p className="text-lg">Camera is off</p>
+                  <p className="text-sm mt-2">Click "Start Camera" to begin</p>
                 </div>
               </div>
-            ))}
+            )}
+            {isDetecting && (
+              <div className="absolute top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                <span className="text-sm">Detecting...</span>
+              </div>
+            )}
           </div>
-        )}
+
+          {isStreaming && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-600">
+              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+              <span>Live</span>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-6">
+          <h2 className="text-2xl font-semibold text-gray-800 mb-4">Detection Result</h2>
+          
+          {!lastResult ? (
+            <div className="text-center py-12 text-gray-500">
+              <p>Start detection to see results</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className={`flex items-center gap-3 p-4 rounded-xl ${
+                lastResult.match ? 'bg-emerald-100' : 'bg-red-100'
+              }`}>
+                {lastResult.match ? (
+                  <MdCheckCircle className="text-3xl text-emerald-600" />
+                ) : (
+                  <MdCancel className="text-3xl text-red-600" />
+                )}
+                <div>
+                  <h3 className={`font-semibold text-lg ${
+                    lastResult.match ? 'text-emerald-800' : 'text-red-800'
+                  }`}>
+                    {lastResult.match ? 'Match Found' : 'Unknown Person'}
+                  </h3>
+                  <p className={`text-sm ${
+                    lastResult.match ? 'text-emerald-700' : 'text-red-700'
+                  }`}>
+                    {lastResult.message}
+                  </p>
+                </div>
+              </div>
+              
+              {lastResult.match && (
+                <div className="space-y-3">
+                  <div className="bg-gray-50 p-4 rounded-xl">
+                    <p className="text-sm text-gray-600">Person Name</p>
+                    <p className="text-lg font-semibold text-gray-800">{lastResult.person_name}</p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-xl">
+                    <p className="text-sm text-gray-600">Person ID</p>
+                    <p className="text-lg font-semibold text-gray-800">{lastResult.person_id}</p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-xl">
+                    <p className="text-sm text-gray-600">Confidence</p>
+                    <p className="text-lg font-semibold text-gray-800">{lastResult.confidence}%</p>
+                  </div>
+                </div>
+              )}
+              
+              {!lastResult.match && lastResult.closest_match && (
+                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                  <p className="text-sm text-yellow-800 font-medium mb-2">Closest Match</p>
+                  <div className="space-y-1 text-sm">
+                    <p className="text-gray-700">
+                      <span className="font-medium">User:</span> {lastResult.closest_match.person_name}
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-medium">ID:</span> {lastResult.closest_match.person_id}
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-medium">Similarity:</span> {lastResult.closest_match.confidence}%
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

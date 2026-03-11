@@ -124,11 +124,25 @@ async def verify_face(
                 "message": f"Matched with {person.name}"
             }
         else:
-            return {
-                "match": False,
-                "confidence": round(best_similarity * 100, 2),
-                "message": "Unknown person"
-            }
+            # Unknown, but show closest match
+            if best_match:
+                person = db.query(Person).filter(Person.id == best_match.person_id).first()
+                return {
+                    "match": False,
+                    "confidence": round(best_similarity * 100, 2),
+                    "message": "Unknown person",
+                    "closest_match": {
+                        "person_id": person.id,
+                        "person_name": person.name,
+                        "confidence": round(best_similarity * 100, 2)
+                    }
+                }
+            else:
+                return {
+                    "match": False,
+                    "confidence": 0.0,
+                    "message": "Unknown person"
+                }
     
     except Exception as e:
         # Clean up temp file

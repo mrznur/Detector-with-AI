@@ -8,6 +8,7 @@ export default function Persons() {
   const [showForm, setShowForm] = useState(false);
   const [enrollingPersonId, setEnrollingPersonId] = useState<number | null>(null);
   const [enrollFile, setEnrollFile] = useState<File | null>(null);
+  const [enrollPreview, setEnrollPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ show: boolean; personId: number | null; personName: string }>({
     show: false,
@@ -196,29 +197,30 @@ export default function Persons() {
           <div className="space-y-3">
             {persons.map((person: any) => (
               <div key={person.id} className="bg-white/70 backdrop-blur-sm p-5 rounded-2xl shadow-lg border border-white/50 hover:shadow-xl transition">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                  <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-800 text-lg">{person.name}</h3>
-                    <div className="flex gap-3 mt-2 text-sm text-gray-600">
+                    <div className="flex flex-wrap gap-2 mt-2 text-sm text-gray-600">
                       {person.age && <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg">Age: {person.age}</span>}
                       {person.gender && <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-lg">{person.gender}</span>}
                       {person.employee_id && <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg">ID: {person.employee_id}</span>}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                     <button
                       onClick={() => setEnrollingPersonId(person.id)}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition"
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition whitespace-nowrap"
                     >
                       <MdCameraAlt />
-                      Enroll Face
+                      <span className="hidden sm:inline">Enroll Face</span>
+                      <span className="sm:hidden">Enroll</span>
                     </button>
                     <button
                       onClick={() => handleDeletePerson(person.id, person.name)}
-                      className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition"
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition whitespace-nowrap"
                     >
                       <MdDelete />
-                      Delete
+                      <span className="hidden sm:inline">Delete</span>
                     </button>
                   </div>
                 </div>
@@ -230,11 +232,34 @@ export default function Persons() {
                     </label>
                     <input
                       type="file"
-                      accept="image/*"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0] || null;
                         setEnrollFile(file);
                         console.log('File selected:', file?.name);
+                        
+                        // Generate preview
+                        if (file) {
+                          const isHEIC = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+                          
+                          if (isHEIC) {
+                            // For HEIC, show placeholder
+                            setEnrollPreview('heic-placeholder');
+                          } else {
+                            // For other formats, show preview
+                            try {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setEnrollPreview(reader.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            } catch (error) {
+                              console.error('Error processing image:', error);
+                              setEnrollPreview(null);
+                            }
+                          }
+                        } else {
+                          setEnrollPreview(null);
+                        }
                       }}
                       className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none mb-3 p-2"
                     />
@@ -242,6 +267,20 @@ export default function Persons() {
                       <p className="text-sm text-gray-600 mb-3">
                         Selected: {enrollFile.name} ({(enrollFile.size / 1024).toFixed(2)} KB)
                       </p>
+                    )}
+                    {enrollPreview && (
+                      <div className="mb-3">
+                        {enrollPreview === 'heic-placeholder' ? (
+                          <div className="w-full h-48 bg-gray-100 rounded-lg border border-gray-300 flex items-center justify-center">
+                            <div className="text-center">
+                              <p className="text-gray-600 font-medium">HEIC Image</p>
+                              <p className="text-xs text-gray-500 mt-1">Preview not available</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <img src={enrollPreview} alt="Preview" className="max-w-full h-48 object-contain rounded-lg border border-gray-300" />
+                        )}
+                      </div>
                     )}
                     <div className="flex gap-2">
                       <button
@@ -255,6 +294,7 @@ export default function Persons() {
                         onClick={() => {
                           setEnrollingPersonId(null);
                           setEnrollFile(null);
+                          setEnrollPreview(null);
                         }}
                         disabled={uploading}
                         className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 disabled:cursor-not-allowed"

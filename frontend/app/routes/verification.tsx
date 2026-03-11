@@ -7,17 +7,37 @@ export default function Verification() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
       setResult(null);
       
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      // Check if it's a HEIC file
+      const isHEIC = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+      
+      if (isHEIC) {
+        // For HEIC files, show a placeholder instead of preview
+        setPreview('heic-placeholder');
+        console.log('HEIC file selected, backend will handle conversion');
+      } else {
+        // For other formats, show preview normally
+        try {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setPreview(reader.result as string);
+          };
+          reader.onerror = () => {
+            console.error('Failed to read file');
+            alert('Failed to read file');
+          };
+          reader.readAsDataURL(file);
+        } catch (error) {
+          console.error('Error processing image:', error);
+          alert('Failed to process image.');
+          setPreview(null);
+        }
+      }
     }
   };
 
@@ -56,7 +76,6 @@ export default function Verification() {
           <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-emerald-500 transition">
             <input
               type="file"
-              accept="image/*"
               onChange={handleFileSelect}
               className="hidden"
               id="file-upload"
@@ -70,7 +89,17 @@ export default function Verification() {
           
           {preview && (
             <div className="mt-6">
-              <img src={preview} alt="Preview" className="w-full rounded-xl shadow-lg" />
+              {preview === 'heic-placeholder' ? (
+                <div className="w-full h-64 bg-gray-100 rounded-xl flex items-center justify-center border-2 border-gray-300">
+                  <div className="text-center">
+                    <p className="text-gray-600 font-medium">HEIC Image Selected</p>
+                    <p className="text-sm text-gray-500 mt-2">Preview not available</p>
+                    <p className="text-xs text-gray-400 mt-1">Backend will process the image</p>
+                  </div>
+                </div>
+              ) : (
+                <img src={preview} alt="Preview" className="w-full rounded-xl shadow-lg" />
+              )}
               <button
                 onClick={handleVerify}
                 disabled={loading}
@@ -131,11 +160,30 @@ export default function Verification() {
               )}
               
               {!result.match && result.confidence && (
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <p className="text-sm text-gray-600">Best Match Confidence</p>
-                  <p className="text-lg font-semibold text-gray-800">{result.confidence}%</p>
-                  <p className="text-xs text-gray-500 mt-1">Threshold: 65% (Higher accuracy)</p>
-                </div>
+                <>
+                  <div className="bg-gray-50 p-4 rounded-xl">
+                    <p className="text-sm text-gray-600">Best Match Confidence</p>
+                    <p className="text-lg font-semibold text-gray-800">{result.confidence}%</p>
+                    <p className="text-xs text-gray-500 mt-1">Threshold: 65% (Higher accuracy)</p>
+                  </div>
+                  
+                  {result.closest_match && (
+                    <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                      <p className="text-sm text-yellow-800 font-medium mb-2">Closest Match</p>
+                      <div className="space-y-1">
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">User:</span> {result.closest_match.person_name}
+                        </p>
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">ID:</span> {result.closest_match.person_id}
+                        </p>
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">Similarity:</span> {result.closest_match.confidence}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
