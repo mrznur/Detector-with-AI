@@ -32,6 +32,29 @@ class FaceRecognitionConfig:
     # False = Faster processing
     USE_PREPROCESSING = False  # Disabled for speed
 
+# Quick Configuration Presets:
+# 
+# SPEED PRIORITY (current):
+#   MODEL_NAME = "Facenet"
+#   DETECTOR_BACKEND = "opencv"
+#   ALIGN_FACES = False
+#   USE_PREPROCESSING = False
+#   VERIFICATION_THRESHOLD = 0.65
+#
+# ACCURACY PRIORITY:
+#   MODEL_NAME = "ArcFace"  # or "VGG-Face"
+#   DETECTOR_BACKEND = "retinaface"
+#   ALIGN_FACES = True
+#   USE_PREPROCESSING = True
+#   VERIFICATION_THRESHOLD = 0.70
+#
+# BALANCED:
+#   MODEL_NAME = "Facenet512"
+#   DETECTOR_BACKEND = "mtcnn"
+#   ALIGN_FACES = True
+#   USE_PREPROCESSING = False
+#   VERIFICATION_THRESHOLD = 0.65
+
 # Model Comparison:
 # 
 # VGG-Face:

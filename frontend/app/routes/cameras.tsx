@@ -7,10 +7,28 @@ interface DetectionResult {
   person_name?: string;
   confidence?: number;
   message: string;
+  faces_detected?: number;
   closest_match?: {
     person_id: number;
     person_name: string;
     confidence: number;
+  };
+  persons?: Array<{
+    person_id: number | null;
+    person_name: string;
+    confidence: number;
+    closest_match?: {
+      person_id: number;
+      person_name: string;
+      confidence: number;
+    };
+  }>;
+  motion?: {
+    detected: boolean;
+    motion: boolean;
+    intensity: number;
+    moving_objects?: number;
+    message?: string;
   };
 }
 
@@ -255,58 +273,135 @@ export default function Cameras() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className={`flex items-center gap-3 p-4 rounded-xl ${
-                lastResult.match ? 'bg-emerald-100' : 'bg-red-100'
-              }`}>
-                {lastResult.match ? (
-                  <MdCheckCircle className="text-3xl text-emerald-600" />
-                ) : (
-                  <MdCancel className="text-3xl text-red-600" />
-                )}
-                <div>
-                  <h3 className={`font-semibold text-lg ${
-                    lastResult.match ? 'text-emerald-800' : 'text-red-800'
+              {/* Multiple faces detected */}
+              {lastResult.persons && lastResult.persons.length > 1 ? (
+                <>
+                  <div className="bg-blue-100 p-4 rounded-xl">
+                    <h3 className="font-semibold text-lg text-blue-800 mb-2">
+                      {lastResult.faces_detected} Faces Detected
+                    </h3>
+                  </div>
+                  
+                  {lastResult.persons.map((person, idx) => (
+                    <div key={idx} className={`p-4 rounded-xl ${
+                      person.person_id ? 'bg-emerald-100' : 'bg-red-100'
+                    }`}>
+                      <div className="flex items-center gap-3 mb-2">
+                        {person.person_id ? (
+                          <MdCheckCircle className="text-2xl text-emerald-600" />
+                        ) : (
+                          <MdCancel className="text-2xl text-red-600" />
+                        )}
+                        <h4 className={`font-semibold ${
+                          person.person_id ? 'text-emerald-800' : 'text-red-800'
+                        }`}>
+                          Face {idx + 1}: {person.person_name}
+                        </h4>
+                      </div>
+                      
+                      {person.person_id && (
+                        <div className="space-y-2 text-sm">
+                          <p className="text-gray-700">
+                            <span className="font-medium">ID:</span> {person.person_id}
+                          </p>
+                          <p className="text-gray-700">
+                            <span className="font-medium">Confidence:</span> {person.confidence}%
+                          </p>
+                        </div>
+                      )}
+                      
+                      {!person.person_id && person.closest_match && (
+                        <div className="bg-yellow-50 p-2 rounded mt-2 text-sm">
+                          <p className="text-yellow-800 font-medium">Closest: {person.closest_match.person_name} ({person.closest_match.confidence}%)</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                /* Single face */
+                <>
+                  <div className={`flex items-center gap-3 p-4 rounded-xl ${
+                    lastResult.match ? 'bg-emerald-100' : 'bg-red-100'
                   }`}>
-                    {lastResult.match ? 'Match Found' : 'Unknown Person'}
-                  </h3>
-                  <p className={`text-sm ${
-                    lastResult.match ? 'text-emerald-700' : 'text-red-700'
-                  }`}>
-                    {lastResult.message}
-                  </p>
-                </div>
-              </div>
-              
-              {lastResult.match && (
-                <div className="space-y-3">
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-600">Person Name</p>
-                    <p className="text-lg font-semibold text-gray-800">{lastResult.person_name}</p>
+                    {lastResult.match ? (
+                      <MdCheckCircle className="text-3xl text-emerald-600" />
+                    ) : (
+                      <MdCancel className="text-3xl text-red-600" />
+                    )}
+                    <div>
+                      <h3 className={`font-semibold text-lg ${
+                        lastResult.match ? 'text-emerald-800' : 'text-red-800'
+                      }`}>
+                        {lastResult.match ? 'Match Found' : 'Unknown Person'}
+                      </h3>
+                      <p className={`text-sm ${
+                        lastResult.match ? 'text-emerald-700' : 'text-red-700'
+                      }`}>
+                        {lastResult.message}
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-600">Person ID</p>
-                    <p className="text-lg font-semibold text-gray-800">{lastResult.person_id}</p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-600">Confidence</p>
-                    <p className="text-lg font-semibold text-gray-800">{lastResult.confidence}%</p>
-                  </div>
-                </div>
+                  
+                  {lastResult.match && (
+                    <div className="space-y-3">
+                      <div className="bg-gray-50 p-4 rounded-xl">
+                        <p className="text-sm text-gray-600">Person Name</p>
+                        <p className="text-lg font-semibold text-gray-800">{lastResult.person_name}</p>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-xl">
+                        <p className="text-sm text-gray-600">Person ID</p>
+                        <p className="text-lg font-semibold text-gray-800">{lastResult.person_id}</p>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-xl">
+                        <p className="text-sm text-gray-600">Confidence</p>
+                        <p className="text-lg font-semibold text-gray-800">{lastResult.confidence}%</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {!lastResult.match && lastResult.closest_match && (
+                    <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                      <p className="text-sm text-yellow-800 font-medium mb-2">Closest Match</p>
+                      <div className="space-y-1 text-sm">
+                        <p className="text-gray-700">
+                          <span className="font-medium">User:</span> {lastResult.closest_match.person_name}
+                        </p>
+                        <p className="text-gray-700">
+                          <span className="font-medium">ID:</span> {lastResult.closest_match.person_id}
+                        </p>
+                        <p className="text-gray-700">
+                          <span className="font-medium">Similarity:</span> {lastResult.closest_match.confidence}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               
-              {!lastResult.match && lastResult.closest_match && (
-                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                  <p className="text-sm text-yellow-800 font-medium mb-2">Closest Match</p>
-                  <div className="space-y-1 text-sm">
-                    <p className="text-gray-700">
-                      <span className="font-medium">User:</span> {lastResult.closest_match.person_name}
+              {/* Motion Detection */}
+              {lastResult.motion && lastResult.motion.detected && (
+                <div className={`p-3 rounded-lg mt-4 ${
+                  lastResult.motion.motion ? 'bg-orange-50 border border-orange-200' : 'bg-gray-50'
+                }`}>
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Motion Detection</h4>
+                  <div className="space-y-1 text-sm text-gray-700">
+                    <p>
+                      <span className="font-medium">Status:</span>{' '}
+                      {lastResult.motion.motion ? (
+                        <span className="text-orange-600 font-semibold">Movement Detected 🤚</span>
+                      ) : (
+                        <span className="text-gray-600">No Movement</span>
+                      )}
                     </p>
-                    <p className="text-gray-700">
-                      <span className="font-medium">ID:</span> {lastResult.closest_match.person_id}
+                    <p>
+                      <span className="font-medium">Intensity:</span> {lastResult.motion.intensity}%
                     </p>
-                    <p className="text-gray-700">
-                      <span className="font-medium">Similarity:</span> {lastResult.closest_match.confidence}%
-                    </p>
+                    {lastResult.motion.moving_objects !== undefined && lastResult.motion.moving_objects > 0 && (
+                      <p>
+                        <span className="font-medium">Moving Objects:</span> {lastResult.motion.moving_objects}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
