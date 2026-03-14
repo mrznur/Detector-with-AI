@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { MdAdd, MdClose, MdCameraAlt, MdDelete } from 'react-icons/md';
 import ConfirmModal from '../components/ConfirmModal';
+import ToastContainer from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 export default function Persons() {
   const [persons, setPersons] = useState([]);
@@ -15,6 +17,7 @@ export default function Persons() {
     personId: null,
     personName: ''
   });
+  const { toasts, removeToast, toast } = useToast();
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -48,16 +51,17 @@ export default function Persons() {
         loadPersons();
         setShowForm(false);
         setFormData({ name: '', age: '', gender: '', employee_id: '' });
+        toast.success('Person created', `${formData.name} has been added.`);
       })
       .catch(err => {
         console.error('Error creating person:', err);
-        alert('Failed to create person. Check console for details.');
+        toast.error('Failed to create person', 'Check console for details.');
       });
   };
 
   const handleEnrollFace = async (personId: number) => {
     if (!enrollFile) {
-      alert('Please select a file first');
+      toast.warning('No file selected', 'Please select a photo first.');
       return;
     }
     
@@ -78,16 +82,17 @@ export default function Persons() {
       console.log('Response:', data);
       
       if (response.ok) {
-        alert(`Face enrolled successfully for ${data.person_name}!`);
+        toast.success('Face enrolled', `Face saved for ${data.person_name}.`);
         setEnrollingPersonId(null);
         setEnrollFile(null);
+        setEnrollPreview(null);
       } else {
         console.error('Error response:', data);
-        alert(`Failed to enroll face: ${data.detail || 'Unknown error'}`);
+        toast.error('Enrollment failed', data.detail || 'Unknown error');
       }
     } catch (error) {
       console.error('Error enrolling face:', error);
-      alert('Error enrolling face. Make sure the backend is running.');
+      toast.error('Connection error', 'Make sure the backend is running.');
     } finally {
       setUploading(false);
     }
@@ -102,12 +107,12 @@ export default function Persons() {
     
     try {
       await api.delete(`/persons/${deleteModal.personId}`);
-      console.log('Person deleted successfully');
       loadPersons();
       setDeleteModal({ show: false, personId: null, personName: '' });
+      toast.success('Person deleted', `${deleteModal.personName} has been removed.`);
     } catch (error) {
       console.error('Error deleting person:', error);
-      alert('Failed to delete person');
+      toast.error('Delete failed', 'Could not delete person.');
     }
   };
 
@@ -116,10 +121,10 @@ export default function Persons() {
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center">
+    <div className="p-4 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-5xl font-bold text-gray-800">Persons</h1>
+          <h1 className="text-3xl md:text-5xl font-bold text-gray-800">Persons</h1>
           <p className="text-gray-600 mt-1">Manage registered persons</p>
         </div>
         <button 
@@ -320,6 +325,7 @@ export default function Persons() {
         onCancel={cancelDelete}
         type="danger"
       />
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }

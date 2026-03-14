@@ -12,8 +12,8 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className="p-8">
-      <h1 className="text-5xl font-bold text-gray-800">Dashboard</h1>
+    <div className="p-4 md:p-8">
+      <h1 className="text-3xl md:text-5xl font-bold text-gray-800">Dashboard</h1>
       <p className="text-gray-600 mt-2">Welcome to the Detection System</p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">

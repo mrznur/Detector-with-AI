@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { MdCloudUpload, MdCheckCircle, MdCancel } from 'react-icons/md';
+import ToastContainer from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 export default function Verification() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const { toasts, removeToast, toast } = useToast();
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -17,24 +20,15 @@ export default function Verification() {
       const isHEIC = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
       
       if (isHEIC) {
-        // For HEIC files, show a placeholder instead of preview
         setPreview('heic-placeholder');
-        console.log('HEIC file selected, backend will handle conversion');
       } else {
-        // For other formats, show preview normally
         try {
           const reader = new FileReader();
-          reader.onloadend = () => {
-            setPreview(reader.result as string);
-          };
-          reader.onerror = () => {
-            console.error('Failed to read file');
-            alert('Failed to read file');
-          };
+          reader.onloadend = () => setPreview(reader.result as string);
+          reader.onerror = () => toast.error('Failed to read file');
           reader.readAsDataURL(file);
         } catch (error) {
-          console.error('Error processing image:', error);
-          alert('Failed to process image.');
+          toast.error('Failed to process image');
           setPreview(null);
         }
       }
@@ -56,17 +50,24 @@ export default function Verification() {
       
       const data = await response.json();
       setResult(data);
+      if (data.match) {
+        toast.success('Match found', `Identified as ${data.person_name} (${data.confidence}%)`);
+      } else {
+        toast.info('No match', data.closest_match ? `Closest: ${data.closest_match.person_name}` : 'Unknown person');
+      }
     } catch (error) {
       console.error('Error:', error);
       setResult({ match: false, message: 'Error verifying face' });
+      toast.error('Verification failed', 'Make sure the backend is running.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-8">
-      <h1 className="text-5xl font-bold text-gray-800">Face Verification</h1>
+    <>
+    <div className="p-4 md:p-8">
+      <h1 className="text-3xl md:text-5xl font-bold text-gray-800">Face Verification</h1>
       <p className="text-gray-600 mt-2">Upload a photo to verify identity</p>
       
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -190,5 +191,7 @@ export default function Verification() {
         </div>
       </div>
     </div>
+    <ToastContainer toasts={toasts} onRemove={removeToast} />
+    </>
   );
 }

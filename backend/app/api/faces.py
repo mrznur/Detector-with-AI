@@ -3,11 +3,13 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 import shutil
 import numpy as np
+from datetime import datetime
 from deepface import DeepFace
 from ..core.database import get_db
 from ..core.face_config import face_config
 from ..models.person import Person
 from ..models.face_embedding import FaceEmbedding
+from ..models.presence_log import PresenceLog
 from ..services.face_service import face_service
 from ..services.gesture_service import gesture_service
 
@@ -73,6 +75,21 @@ def get_person_embeddings(person_id: int, db: Session = Depends(get_db)):
         "embedding_count": len(embeddings),
         "embeddings": [{"id": e.id, "created_at": e.created_at} for e in embeddings]
     }
+
+
+def log_detection(db: Session, person_id: int, confidence: float):
+    """Save a detection event to presence_logs"""
+    try:
+        log = PresenceLog(
+            person_id=person_id,
+            camera_id=None,  # Webcam - no registered camera
+            confidence_score=round(confidence, 2),
+            detected_at=datetime.utcnow()
+        )
+        db.add(log)
+        db.commit()
+    except Exception:
+        db.rollback()  # Don't fail the whole request if logging fails
 
 
 @router.post("/verify")
@@ -155,6 +172,8 @@ async def verify_face(
                     "person_name": person.name,
                     "confidence": round(best_similarity * 100, 2)
                 })
+                # Log matched detection to database
+                log_detection(db, person.id, best_similarity * 100)
             else:
                 # Unknown person
                 if best_match:

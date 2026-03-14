@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MdVideocam, MdVideocamOff, MdPerson, MdCheckCircle, MdCancel } from 'react-icons/md';
+import ToastContainer from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 interface DetectionResult {
   match: boolean;
@@ -42,6 +44,7 @@ export default function Cameras() {
   const [lastResult, setLastResult] = useState<DetectionResult | null>(null);
   const [detecting, setDetecting] = useState(false);
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { toasts, removeToast, toast } = useToast();
 
   const startCamera = async () => {
     try {
@@ -79,12 +82,13 @@ export default function Cameras() {
     } catch (err: any) {
       console.error('Error accessing camera:', err);
       if (err.name === 'NotAllowedError') {
-        setError('Camera access denied. Please allow camera permissions in your browser.');
+        toast.error('Camera access denied', 'Please allow camera permissions in your browser.');
       } else if (err.name === 'NotFoundError') {
-        setError('No camera found. Please connect a camera and try again.');
+        toast.error('No camera found', 'Please connect a camera and try again.');
       } else {
-        setError(`Failed to access camera: ${err.message}`);
+        toast.error('Camera error', err.message);
       }
+      setError(err.message);
     }
   };
 
@@ -146,6 +150,7 @@ export default function Cameras() {
       setLastResult(data);
     } catch (error) {
       console.error('Detection error:', error);
+      toast.error('Detection error', 'Could not reach backend.');
     } finally {
       setDetecting(false);
     }
@@ -179,13 +184,14 @@ export default function Cameras() {
   }, [stream]);
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <>
+    <div className="p-4 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-5xl font-bold text-gray-800">Live Camera</h1>
+          <h1 className="text-3xl md:text-5xl font-bold text-gray-800">Live Camera</h1>
           <p className="text-gray-600 mt-2">Real-time face detection</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           {isStreaming && (
             <button
               onClick={isDetecting ? stopDetection : startDetection}
@@ -227,7 +233,6 @@ export default function Cameras() {
           {error}
         </div>
       )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-6">
           <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
@@ -410,5 +415,7 @@ export default function Cameras() {
         </div>
       </div>
     </div>
+    <ToastContainer toasts={toasts} onRemove={removeToast} />
+    </>
   );
 }
